@@ -147,8 +147,8 @@
         return calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness);
     }
 
-    function calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness) {
-        // Get industry multiplier
+    function calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness) {␊
+        // Get industry multiplier␊
         const industryData = fallbackIndustries.find(i => i.industry.toLowerCase() === industry.toLowerCase());
         const industryMultiplier = industryData ? industryData.risk_multiplier : 1.2;
         
@@ -183,9 +183,122 @@
                 effectiveness: weighted
             }
         };
-    }
+         }
 
     /**
+     * World Map Component using D3
+     */
+    class WorldMapComponent {
+        constructor(containerId) {
+            this.container = d3.select(`#${containerId}`);
+            this.tooltip = d3.select('#map-tooltip');
+            this.selectedCountries = new Set();
+            this.riskData = new Map();
+            this.width = this.container.node().clientWidth || 1000;
+            this.height = 500;
+
+            this.init();
+        }
+
+        async init() {
+            const NAME_MAP = {
+                'United States of America': 'United States',
+                'Viet Nam': 'Vietnam',
+                'Korea, Republic of': 'South Korea'
+            };
+
+            const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+            const countries = topojson.feature(world, world.objects.countries).features;
+
+            const projection = d3.geoNaturalEarth1().fitSize([this.width, this.height], { type: 'Sphere' });
+            const path = d3.geoPath(projection);
+
+            this.svg = this.container.append('svg')
+                .attr('class', 'world-map-svg')
+                .attr('width', this.width)
+                .attr('height', this.height);
+
+            this.svg.selectAll('path')
+                .data(countries)
+                .enter()
+                .append('path')
+                .attr('class', 'country-path')
+                .attr('data-country', d => NAME_MAP[d.properties.name] || d.properties.name)
+                .attr('d', path)
+                .on('mouseenter', (event, d) => this.showTooltip(event, d3.select(event.currentTarget).attr('data-country')))
+                .on('mousemove', (event) => this.updateTooltipPosition(event))
+                .on('mouseleave', () => this.hideTooltip())
+                .on('click', (event, d) => this.toggleCountrySelection(d3.select(event.currentTarget).attr('data-country'), event.currentTarget));
+        }
+
+        updateRiskData(riskResults) {
+            this.svg.selectAll('.country-path')
+                .classed('risk-very-low', false)
+                .classed('risk-low', false)
+                .classed('risk-medium', false)
+                .classed('risk-high', false)
+                .classed('risk-very-high', false);
+
+            riskResults.country_risks.forEach(countryRisk => {
+                this.riskData.set(countryRisk.country, countryRisk.risk);
+                const path = this.findCountryPath(countryRisk.country);
+                if (path) {
+                    const riskClass = this.getRiskClass(countryRisk.risk);
+                    d3.select(path).classed(riskClass, true);
+                }
+            });
+        }
+
+        findCountryPath(countryName) {
+            return this.svg.selectAll('.country-path').filter(function() {
+                return d3.select(this).attr('data-country') === countryName;
+            }).node();
+        }
+
+        getRiskClass(riskScore) {
+            if (riskScore <= 20) return 'risk-very-low';
+            if (riskScore <= 40) return 'risk-low';
+            if (riskScore <= 60) return 'risk-medium';
+            if (riskScore <= 80) return 'risk-high';
+            return 'risk-very-high';
+        }
+
+        showTooltip(event, countryName) {
+            const risk = this.riskData.get(countryName);
+            const text = risk !== undefined ? `${countryName}: ${risk}` : countryName;
+            this.tooltip.style('opacity', 1).text(text);
+            this.updateTooltipPosition(event);
+        }
+
+        updateTooltipPosition(event) {
+            this.tooltip
+                .style('left', (event.offsetX + 10) + 'px')
+                .style('top', (event.offsetY + 10) + 'px');
+        }
+
+        hideTooltip() {
+            this.tooltip.style('opacity', 0);
+        }
+
+        toggleCountrySelection(countryName, pathElement) {
+            const path = d3.select(pathElement);
+            if (this.selectedCountries.has(countryName)) {
+                this.selectedCountries.delete(countryName);
+                path.classed('selected', false);
+            } else {
+                this.selectedCountries.add(countryName);
+                path.classed('selected', true);
+            }
+
+            const event = new CustomEvent('countrySelectionChanged', {
+                detail: { selectedCountries: Array.from(this.selectedCountries) }
+            });
+            this.container.node().dispatchEvent(event);
+        }
+    }
+
+
+        /**
      * UI Population Functions
      */
     async function populateIndustries() {
@@ -545,20 +658,117 @@
         }
     }
 
+    }
+
     /**
-     * World Map Integration
+     * World Map Component using D3
      */
-    function initializeWorldMap() {
-        if (typeof WorldMapComponent !== 'undefined') {
-            worldMapComponent = new WorldMapComponent('world-map-container');
-            
-            // Listen for map country selection changes
-            const mapContainer = document.getElementById('world-map-container');
-            if (mapContainer) {
-                mapContainer.addEventListener('countrySelectionChanged', (event) => {
-                    setSelectedCountries(event.detail.selectedCountries);
-                });
+    class WorldMapComponent {
+        constructor(containerId) {
+            this.container = d3.select(`#${containerId}`);
+            this.tooltip = d3.select('#map-tooltip');
+            this.selectedCountries = new Set();
+            this.riskData = new Map();
+            this.width = this.container.node().clientWidth || 1000;
+            this.height = 500;
+
+            this.init();
+        }
+
+        async init() {
+            const NAME_MAP = {
+                'United States of America': 'United States',
+                'Viet Nam': 'Vietnam',
+                'Korea, Republic of': 'South Korea'
+            };
+
+            const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+            const countries = topojson.feature(world, world.objects.countries).features;
+
+            const projection = d3.geoNaturalEarth1().fitSize([this.width, this.height], { type: 'Sphere' });
+            const path = d3.geoPath(projection);
+
+            this.svg = this.container.append('svg')
+                .attr('class', 'world-map-svg')
+                .attr('width', this.width)
+                .attr('height', this.height);
+
+            this.svg.selectAll('path')
+                .data(countries)
+                .enter()
+                .append('path')
+                .attr('class', 'country-path')
+                .attr('data-country', d => NAME_MAP[d.properties.name] || d.properties.name)
+                .attr('d', path)
+                .on('mouseenter', (event, d) => this.showTooltip(event, d3.select(event.currentTarget).attr('data-country')))
+                .on('mousemove', (event) => this.updateTooltipPosition(event))
+                .on('mouseleave', () => this.hideTooltip())
+                .on('click', (event, d) => this.toggleCountrySelection(d3.select(event.currentTarget).attr('data-country'), event.currentTarget));
+        }
+
+        updateRiskData(riskResults) {
+            this.svg.selectAll('.country-path')
+                .classed('risk-very-low', false)
+                .classed('risk-low', false)
+                .classed('risk-medium', false)
+                .classed('risk-high', false)
+                .classed('risk-very-high', false);
+
+            riskResults.country_risks.forEach(countryRisk => {
+                this.riskData.set(countryRisk.country, countryRisk.risk);
+                const path = this.findCountryPath(countryRisk.country);
+                if (path) {
+                    const riskClass = this.getRiskClass(countryRisk.risk);
+                    d3.select(path).classed(riskClass, true);
+                }
+            });
+        }
+
+        findCountryPath(countryName) {
+            return this.svg.selectAll('.country-path').filter(function() {
+                return d3.select(this).attr('data-country') === countryName;
+            }).node();
+        }
+
+        getRiskClass(riskScore) {
+            if (riskScore <= 20) return 'risk-very-low';
+            if (riskScore <= 40) return 'risk-low';
+            if (riskScore <= 60) return 'risk-medium';
+            if (riskScore <= 80) return 'risk-high';
+            return 'risk-very-high';
+        }
+
+        showTooltip(event, countryName) {
+            const risk = this.riskData.get(countryName);
+            const text = risk !== undefined ? `${countryName}: ${risk}` : countryName;
+            this.tooltip.style('opacity', 1).text(text);
+            this.updateTooltipPosition(event);
+        }
+
+        updateTooltipPosition(event) {
+            this.tooltip
+                .style('left', (event.offsetX + 10) + 'px')
+                .style('top', (event.offsetY + 10) + 'px');
+        }
+
+        hideTooltip() {
+            this.tooltip.style('opacity', 0);
+        }
+
+        toggleCountrySelection(countryName, pathElement) {
+            const path = d3.select(pathElement);
+            if (this.selectedCountries.has(countryName)) {
+                this.selectedCountries.delete(countryName);
+                path.classed('selected', false);
+            } else {
+                this.selectedCountries.add(countryName);
+                path.classed('selected', true);
             }
+
+            const event = new CustomEvent('countrySelectionChanged', {
+                detail: { selectedCountries: Array.from(this.selectedCountries) }
+            });
+            this.container.node().dispatchEvent(event);
         }
     }
 
