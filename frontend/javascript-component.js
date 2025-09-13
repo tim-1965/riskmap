@@ -228,7 +228,10 @@
                 .on('mouseenter', (event, d) => this.showTooltip(event, d3.select(event.currentTarget).attr('data-country')))
                 .on('mousemove', (event) => this.updateTooltipPosition(event))
                 .on('mouseleave', () => this.hideTooltip())
-                .on('click', (event, d) => this.toggleCountrySelection(d3.select(event.currentTarget).attr('data-country'), event.currentTarget));
+                .on('click', (event) => this.toggleCountrySelection(
+                    d3.select(event.currentTarget).attr('data-country'),
+                    event.currentTarget
+                ));
         }
 
         updateRiskData(riskResults) {
