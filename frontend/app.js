@@ -1,8 +1,8 @@
 diff --git a//dev/null b/frontend/app.js
-index 0000000000000000000000000000000000000000..b8a92e72033e424f9751ccf967c678dbd4e7b944 100644
+index 0000000000000000000000000000000000000000..3b1bbc6e231fc8f15def36af33f1131e001c4a1b 100644
 --- a//dev/null
 +++ b/frontend/app.js
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,245 @@
 +(function() {
 +  const sliderIds = ['continuous-monitoring','unannounced-audit','announced-audit','self-assessment','no-engagement'];
 +  let effectivenessMode = false;
@@ -131,15 +131,41 @@ index 0000000000000000000000000000000000000000..b8a92e72033e424f9751ccf967c678db
 +      toggleBtn.textContent = effectivenessMode ? '🚫 Use Default Effectiveness' : '📊 Customize Effectiveness';
 +    }
 +    if (note) {
-+      note.textContent = effectivenessMode ? 'Enter effectiveness for each strategy' : 'Click to adjust effectiveness percentages based on your experience';
++      note.textContent = effectivenessMode
++        ? 'Enter effectiveness for each strategy'
++        : 'Click to adjust effectiveness percentages based on your experience';
 +    }
 +  }
 +
 +  const presets = {
-+    conservative: {'continuous-monitoring':30,'unannounced-audit':20,'announced-audit':25,'self-assessment':20,'no-engagement':5},
-+    balanced: {'continuous-monitoring':20,'unannounced-audit':15,'announced-audit':25,'self-assessment':30,'no-engagement':10},
-+    aggressive: {'continuous-monitoring':40,'unannounced-audit':30,'announced-audit':20,'self-assessment':5,'no-engagement':5},
-+    minimal: {'continuous-monitoring':5,'unannounced-audit':5,'announced-audit':10,'self-assessment':30,'no-engagement':50}
++    conservative: {
++      'continuous-monitoring': 30,
++      'unannounced-audit': 20,
++      'announced-audit': 25,
++      'self-assessment': 20,
++      'no-engagement': 5
++    },
++    balanced: {
++      'continuous-monitoring': 20,
++      'unannounced-audit': 15,
++      'announced-audit': 25,
++      'self-assessment': 30,
++      'no-engagement': 10
++    },
++    aggressive: {
++      'continuous-monitoring': 40,
++      'unannounced-audit': 30,
++      'announced-audit': 20,
++      'self-assessment': 5,
++      'no-engagement': 5
++    },
++    minimal: {
++      'continuous-monitoring': 5,
++      'unannounced-audit': 5,
++      'announced-audit': 10,
++      'self-assessment': 30,
++      'no-engagement': 50
++    }
 +  };
 +
 +  function loadPreset(name) {
@@ -166,8 +192,10 @@ index 0000000000000000000000000000000000000000..b8a92e72033e424f9751ccf967c678db
 +    }
 +    let weighted = 0;
 +    sliderIds.forEach(id => {
-+      const coverage = Number(document.getElementById(id).value);
-+      const eff = Number(document.getElementById(id + '-effectiveness').value);
++      const coverageEl = document.getElementById(id);
++      const effEl = document.getElementById(id + '-effectiveness');
++      const coverage = coverageEl ? Number(coverageEl.value) : 0;
++      const eff = effEl ? Number(effEl.value) : 0;
 +      weighted += coverage * eff / 100;
 +    });
 +    const baseRisk = 70;
@@ -213,6 +241,10 @@ index 0000000000000000000000000000000000000000..b8a92e72033e424f9751ccf967c678db
 +    window.toggleEffectivenessMode = toggleEffectivenessMode;
 +    window.calculateRisk = calculateRisk;
 +    window.loadPreset = loadPreset;
-+    window.addEventListener('DOMContentLoaded', initialize);
++    if (document.readyState === 'loading') {
++      window.addEventListener('DOMContentLoaded', initialize);
++    } else {
++      initialize();
++    }
 +  }
 +})();
