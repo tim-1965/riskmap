@@ -1,7 +1,7 @@
 // server.js - Labor Rights Risk Assessment API
-const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +14,11 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'frontend')));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
 
 // MongoDB Connection
 const connectDB = async () => {
