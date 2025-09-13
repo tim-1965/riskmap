@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="https://riskmap-production.up.railway.app/css-component.css">
+<link rel="stylesheet" href="https://your-host/css-component.css">
 
     <div class="container">
         <div class="header">
@@ -175,16 +175,76 @@
         </div>
 
         <div class="main-content">
-            <div class="map-container">
-                <div id="world-map">
-                    <div class="map-placeholder" id="map-placeholder">
-                        <div>
-                            <h3 style="margin-bottom: 15px;">Interactive Risk Map</h3>
-                            <p>Select countries and calculate risk to see the color-coded visualization</p>
-                            <div id="map-results" style="margin-top: 20px; text-align: left; max-height: 400px; overflow-y: auto;"></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="map-container" id="world-map-container">
+                <svg class="world-map-svg" id="world-map-svg" viewBox="0 0 1000 500">
+                    <!-- Simplified world map paths -->
+                    <!-- United States -->
+                    <path class="country-path" data-country="United States" d="M150,200 L250,180 L280,220 L250,250 L150,240 Z"/>
+
+                    <!-- Canada -->
+                    <path class="country-path" data-country="Canada" d="M150,150 L280,140 L300,180 L280,200 L150,190 Z"/>
+
+                    <!-- Mexico -->
+                    <path class="country-path" data-country="Mexico" d="M150,250 L200,240 L220,280 L180,290 L150,270 Z"/>
+
+                    <!-- Brazil -->
+                    <path class="country-path" data-country="Brazil" d="M200,320 L280,310 L300,380 L220,390 L200,350 Z"/>
+
+                    <!-- United Kingdom -->
+                    <path class="country-path" data-country="United Kingdom" d="M480,180 L500,175 L505,195 L485,200 Z"/>
+
+                    <!-- Germany -->
+                    <path class="country-path" data-country="Germany" d="M520,190 L540,185 L545,205 L525,210 Z"/>
+
+                    <!-- France -->
+                    <path class="country-path" data-country="France" d="M500,200 L520,195 L525,215 L505,220 Z"/>
+
+                    <!-- Italy -->
+                    <path class="country-path" data-country="Italy" d="M530,220 L545,215 L550,240 L535,245 Z"/>
+
+                    <!-- Spain -->
+                    <path class="country-path" data-country="Spain" d="M480,220 L510,215 L515,235 L485,240 Z"/>
+
+                    <!-- China -->
+                    <path class="country-path" data-country="China" d="M700,200 L800,190 L820,250 L720,260 L700,230 Z"/>
+
+                    <!-- India -->
+                    <path class="country-path" data-country="India" d="M650,250 L720,240 L740,300 L670,310 L650,280 Z"/>
+
+                    <!-- Japan -->
+                    <path class="country-path" data-country="Japan" d="M820,200 L850,195 L855,220 L825,225 Z"/>
+
+                    <!-- South Korea -->
+                    <path class="country-path" data-country="South Korea" d="M800,210 L815,208 L818,225 L803,227 Z"/>
+
+                    <!-- Australia -->
+                    <path class="country-path" data-country="Australia" d="M750,350 L850,340 L870,390 L770,400 L750,380 Z"/>
+
+                    <!-- Bangladesh -->
+                    <path class="country-path" data-country="Bangladesh" d="M720,260 L735,258 L738,275 L723,277 Z"/>
+
+                    <!-- Vietnam -->
+                    <path class="country-path" data-country="Vietnam" d="M750,270 L765,268 L768,290 L753,292 Z"/>
+
+                    <!-- Thailand -->
+                    <path class="country-path" data-country="Thailand" d="M730,280 L745,278 L748,295 L733,297 Z"/>
+
+                    <!-- Philippines -->
+                    <path class="country-path" data-country="Philippines" d="M780,280 L795,278 L798,300 L783,302 Z"/>
+
+                    <!-- Indonesia -->
+                    <path class="country-path" data-country="Indonesia" d="M720,310 L780,305 L800,330 L740,335 L720,325 Z"/>
+
+                    <!-- Turkey -->
+                    <path class="country-path" data-country="Turkey" d="M550,210 L580,205 L585,225 L555,230 Z"/>
+
+                    <!-- Egypt -->
+                    <path class="country-path" data-country="Egypt" d="M540,260 L565,255 L570,280 L545,285 Z"/>
+
+                    <!-- South Africa -->
+                    <path class="country-path" data-country="South Africa" d="M520,380 L570,375 L585,410 L535,415 L520,395 Z"/>
+                </svg>
+                <div class="tooltip" id="map-tooltip"></div>
             </div>
 
             <div class="risk-panel">
@@ -250,5 +310,146 @@
             </div>
         </div>
     </div>
+    
+<script>
+    class WorldMapComponent {
+        constructor(containerId) {
+            this.container = document.getElementById(containerId);
+            this.svg = document.getElementById('world-map-svg');
+            this.tooltip = document.getElementById('map-tooltip');
+            this.countryPaths = this.svg.querySelectorAll('.country-path');
+            this.riskData = new Map();
+            this.selectedCountries = new Set();
 
-<script src="https://riskmap-production.up.railway.app/javascript-component.js"></script>
+            this.init();
+        }
+
+        init() {
+            this.countryPaths.forEach(path => {
+                const countryName = path.getAttribute('data-country');
+
+                // Mouse events for tooltip
+                path.addEventListener('mouseenter', (e) => {
+                    this.showTooltip(e, countryName);
+                });
+
+                path.addEventListener('mousemove', (e) => {
+                    this.updateTooltipPosition(e);
+                });
+
+                path.addEventListener('mouseleave', () => {
+                    this.hideTooltip();
+                });
+
+                // Click to select/deselect
+                path.addEventListener('click', () => {
+                    this.toggleCountrySelection(countryName, path);
+                });
+            });
+        }
+
+        updateRiskData(riskResults) {
+            // Clear previous risk styling
+            this.countryPaths.forEach(path => {
+                path.classList.remove('risk-very-low', 'risk-low', 'risk-medium', 'risk-high', 'risk-very-high');
+            });
+
+            // Update risk data and apply colors
+            riskResults.country_risks.forEach(countryRisk => {
+                this.riskData.set(countryRisk.country, countryRisk.risk);
+
+                const path = this.findCountryPath(countryRisk.country);
+                if (path) {
+                    const riskClass = this.getRiskClass(countryRisk.risk);
+                    path.classList.add(riskClass);
+                }
+            });
+        }
+
+        findCountryPath(countryName) {
+            return Array.from(this.countryPaths).find(path =>
+                path.getAttribute('data-country') === countryName
+            );
+        }
+
+        getRiskClass(riskScore) {
+            if (riskScore <= 20) return 'risk-very-low';
+            if (riskScore <= 40) return 'risk-low';
+            if (riskScore <= 60) return 'risk-medium';
+            if (riskScore <= 80) return 'risk-high';
+            return 'risk-very-high';
+        }
+
+        toggleCountrySelection(countryName, path) {
+            if (this.selectedCountries.has(countryName)) {
+                this.selectedCountries.delete(countryName);
+                path.classList.remove('selected');
+            } else {
+                this.selectedCountries.add(countryName);
+                path.classList.add('selected');
+            }
+
+            // Trigger custom event for parent component
+            this.container.dispatchEvent(new CustomEvent('countrySelectionChanged', {
+                detail: {
+                    selectedCountries: Array.from(this.selectedCountries),
+                    country: countryName,
+                    selected: this.selectedCountries.has(countryName)
+                }
+            }));
+        }
+
+        setSelectedCountries(countries) {
+            // Clear previous selections
+            this.selectedCountries.clear();
+            this.countryPaths.forEach(path => path.classList.remove('selected'));
+
+            // Set new selections
+            countries.forEach(countryName => {
+                this.selectedCountries.add(countryName);
+                const path = this.findCountryPath(countryName);
+                if (path) {
+                    path.classList.add('selected');
+                }
+            });
+        }
+
+        showTooltip(event, countryName) {
+            const riskScore = this.riskData.get(countryName);
+            let tooltipText = countryName;
+
+            if (riskScore !== undefined) {
+                const riskLevel = this.getRiskLevel(riskScore);
+                tooltipText += `\nRisk Score: ${riskScore}\nRisk Level: ${riskLevel}`;
+            } else {
+                tooltipText += '\nClick to select for analysis';
+            }
+
+            this.tooltip.textContent = tooltipText;
+            this.tooltip.style.opacity = '1';
+            this.updateTooltipPosition(event);
+        }
+
+        updateTooltipPosition(event) {
+            const rect = this.container.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            this.tooltip.style.left = (x + 10) + 'px';
+            this.tooltip.style.top = (y - 10) + 'px';
+        }
+
+        hideTooltip() {
+            this.tooltip.style.opacity = '0';
+        }
+
+        getRiskLevel(riskScore) {
+            if (riskScore <= 20) return 'Very Low';
+            if (riskScore <= 40) return 'Low';
+            if (riskScore <= 60) return 'Medium';
+            if (riskScore <= 80) return 'High';
+            return 'Very High';
+        }
+    }
+</script>
+<script src="https://your-host/javascript-component.js"></script>
