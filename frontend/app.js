@@ -1,10 +1,18 @@
 diff --git a//dev/null b/frontend/app.js
-index 0000000000000000000000000000000000000000..3b1bbc6e231fc8f15def36af33f1131e001c4a1b 100644
+index 0000000000000000000000000000000000000000..3656c9130cb977ceefa181a2ab338d8d30164fda 100644
 --- a//dev/null
 +++ b/frontend/app.js
-@@ -0,0 +1,245 @@
+@@ -0,0 +1,275 @@
 +(function() {
++  'use strict';
 +  const sliderIds = ['continuous-monitoring','unannounced-audit','announced-audit','self-assessment','no-engagement'];
++  const defaultEffectiveness = {
++    'continuous-monitoring': 85,
++    'unannounced-audit': 50,
++    'announced-audit': 15,
++    'self-assessment': 5,
++    'no-engagement': 0
++  };
 +  let effectivenessMode = false;
 +
 +  function populateIndustries() {
@@ -119,10 +127,10 @@ index 0000000000000000000000000000000000000000..3b1bbc6e231fc8f15def36af33f1131e
 +
 +  function toggleEffectivenessMode() {
 +    effectivenessMode = !effectivenessMode;
-+    document.querySelectorAll('.effectiveness-control').forEach(el => {
++    Array.from(document.querySelectorAll('.effectiveness-control')).forEach(el => {
 +      el.style.display = effectivenessMode ? 'flex' : 'none';
 +    });
-+    document.querySelectorAll('.effectiveness-display').forEach(el => {
++    Array.from(document.querySelectorAll('.effectiveness-display')).forEach(el => {
 +      el.style.display = effectivenessMode ? 'none' : 'inline';
 +    });
 +    const toggleBtn = document.getElementById('effectiveness-toggle');
@@ -178,6 +186,12 @@ index 0000000000000000000000000000000000000000..3b1bbc6e231fc8f15def36af33f1131e
 +        slider.value = values[id];
 +        valueEl.textContent = values[id] + '%';
 +      }
++      const effInput = document.getElementById(id + '-effectiveness');
++      const effDisplay = document.getElementById(id + '-eff-display');
++      if (effInput && effDisplay && defaultEffectiveness[id] !== undefined) {
++        effInput.value = defaultEffectiveness[id];
++        effDisplay.textContent = '(' + defaultEffectiveness[id] + '% effective' + (id === 'no-engagement' ? ' - baseline' : '') + ')';
++      }
 +    });
 +    updateTotal();
 +  }
@@ -190,14 +204,20 @@ index 0000000000000000000000000000000000000000..3b1bbc6e231fc8f15def36af33f1131e
 +      if (errorEl) errorEl.textContent = 'Please select at least one country.';
 +      return;
 +    }
++    let totalCoverage = 0;
 +    let weighted = 0;
 +    sliderIds.forEach(id => {
 +      const coverageEl = document.getElementById(id);
 +      const effEl = document.getElementById(id + '-effectiveness');
 +      const coverage = coverageEl ? Number(coverageEl.value) : 0;
 +      const eff = effEl ? Number(effEl.value) : 0;
++      totalCoverage += coverage;
 +      weighted += coverage * eff / 100;
 +    });
++    if (totalCoverage !== 100) {
++      if (errorEl) errorEl.textContent = 'Coverage percentages must total 100%.';
++      return;
++    }
 +    const baseRisk = 70;
 +    const finalRisk = Math.max(0, baseRisk - weighted);
 +    const riskScoreEl = document.getElementById('risk-score');
@@ -237,14 +257,24 @@ index 0000000000000000000000000000000000000000..3b1bbc6e231fc8f15def36af33f1131e
 +    }
 +  }
 +
-+  if (typeof window !== 'undefined') {
-+    window.toggleEffectivenessMode = toggleEffectivenessMode;
-+    window.calculateRisk = calculateRisk;
-+    window.loadPreset = loadPreset;
++  const root = typeof window !== 'undefined' ? window : globalThis;
++  root.toggleEffectivenessMode = toggleEffectivenessMode;
++  root.calculateRisk = calculateRisk;
++  root.loadPreset = loadPreset;
++
++  if (typeof document !== 'undefined') {
 +    if (document.readyState === 'loading') {
-+      window.addEventListener('DOMContentLoaded', initialize);
++      root.addEventListener('DOMContentLoaded', initialize);
 +    } else {
 +      initialize();
 +    }
++  }
++
++  if (typeof module !== 'undefined' && module.exports) {
++    module.exports = {
++      toggleEffectivenessMode,
++      calculateRisk,
++      loadPreset
++    };
 +  }
 +})();
