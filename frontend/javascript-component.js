@@ -19,12 +19,12 @@
     
     const sliderIds = ['continuous-monitoring','unannounced-audit','announced-audit','self-assessment','no-engagement'];
     const defaultEffectiveness = {
-        'continuous-monitoring': 85,
-        'unannounced-audit': 50,
-        'announced-audit': 15,
-        'self-assessment': 5,
-        'no-engagement': 0
-    };
+        continuous_monitoring: 85,
+        unannounced_audit: 50,
+        announced_audit: 15,
+        self_assessment: 5,
+        no_engagement: 0
+    };␊
 
     // Fallback data for when API is not available
     const fallbackCountries = [
@@ -147,7 +147,7 @@
         return calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness);
     }
 
-    function calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness) {␊
+     function calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness) {␊
         // Get industry multiplier␊
         const industryData = fallbackIndustries.find(i => i.industry.toLowerCase() === industry.toLowerCase());
         const industryMultiplier = industryData ? industryData.risk_multiplier : 1.2;
@@ -183,9 +183,9 @@
                 effectiveness: weighted
             }
         };
-         }
-
-    /**
+    }
+       
+      /**
      * World Map Component using D3
      */
     class WorldMapComponent {
@@ -295,8 +295,15 @@
             });
             this.container.node().dispatchEvent(event);
         }
-    }
 
+        setSelectedCountries(countries) {
+            this.selectedCountries = new Set(countries);
+            this.svg.selectAll('.country-path').each((d, i, nodes) => {
+                const name = d3.select(nodes[i]).attr('data-country');
+                d3.select(nodes[i]).classed('selected', this.selectedCountries.has(name));
+            });
+        }
+    }
 
         /**
      * UI Population Functions
@@ -658,9 +665,7 @@
         }
     }
 
-    }
-
-    /**
+     /**
      * World Map Component using D3
      */
     class WorldMapComponent {
@@ -769,6 +774,24 @@
                 detail: { selectedCountries: Array.from(this.selectedCountries) }
             });
             this.container.node().dispatchEvent(event);
+        }
+    }
+
+/**
+     * World Map Integration
+     */
+    function initializeWorldMap() {
+        if (typeof d3 === 'undefined' || typeof topojson === 'undefined') {
+            return;
+        }
+
+        worldMapComponent = new WorldMapComponent('world-map');
+
+        const mapContainer = document.getElementById('world-map');
+        if (mapContainer) {
+            mapContainer.addEventListener('countrySelectionChanged', (event) => {
+                setSelectedCountries(event.detail.selectedCountries);
+            });
         }
     }
 
