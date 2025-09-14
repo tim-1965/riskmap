@@ -1,4 +1,4 @@
-// server.js - Labor Rights Risk Assessment API
+// server.js - Enhanced Labor Rights Risk Assessment API with Activity Volume Weighting
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
@@ -32,7 +32,7 @@ const connectDB = async () => {
     }
 };
 
-// Enhanced Schemas
+// Enhanced Schemas with Activity Volume Support
 const CountrySchema = new mongoose.Schema({
     country: { type: String, required: true, unique: true },
     iso_code: { type: String, required: true, unique: true },
@@ -68,7 +68,9 @@ const AssessmentSchema = new mongoose.Schema({
     country_scores: [{
         country: String,
         risk_score: Number,
-        base_risk_score: Number
+        base_risk_score: Number,
+        activity_level: { type: Number, default: 10 },
+        weight: { type: Number, default: 0 }
     }],
     hrdd_strategies: {
         continuous_monitoring: { type: Number, default: 0 },
@@ -85,6 +87,8 @@ const AssessmentSchema = new mongoose.Schema({
         no_engagement: { type: Number, default: 0 }
     },
     hrdd_multiplier: { type: Number, default: 1.0 },
+    activity_data: { type: Map, of: Number },
+    total_activity: { type: Number, default: 0 },
     created_at: { type: Date, default: Date.now }
 });
 
@@ -198,16 +202,33 @@ app.get('/api/industries', async (req, res) => {
     }
 });
 
-// Enhanced calculate risk with HRDD strategies
+// Enhanced calculate risk with HRDD strategies and activity volume weighting
 app.post('/api/calculate-risk', async (req, res) => {
     try {
-        const { industry, countries, hrdd_strategies, hrdd_effectiveness } = req.body;
+        const { industry, countries, activity_volumes, hrdd_strategies, hrdd_effectiveness } = req.body;
 
         if (!industry || !countries || !Array.isArray(countries) || countries.length === 0) {
             return res.status(400).json({ 
                 error: 'Invalid request. Industry and countries array required.' 
             });
         }
+
+        // Validate and process activity volumes (default to 10 if not provided)
+        let activityData = {};
+        if (activity_volumes && typeof activity_volumes === 'object') {
+            // Ensure all countries have activity volumes and they're valid numbers
+            countries.forEach(country => {
+                activityData[country] = Math.max(1, Number(activity_volumes[country]) || 10);
+            });
+        } else {
+            // Default all countries to activity level 10
+            countries.forEach(country => {
+                activityData[country] = 10;
+            });
+        }
+
+        // Calculate total activity for weighting
+        const totalActivity = Object.values(activityData).reduce((sum, vol) => sum + vol, 0);
 
         // Validate HRDD strategies if provided
         let hrddMultiplier = 1.0;
@@ -221,7 +242,7 @@ app.post('/api/calculate-risk', async (req, res) => {
                 });
             }
 
-            // Default effectiveness values (updated to match new requirements)
+            // Default effectiveness values
             const defaultEffectiveness = {
                 'continuous_monitoring': 85,
                 'unannounced_audit': 50,
@@ -270,23 +291,30 @@ app.post('/api/calculate-risk', async (req, res) => {
             });
         }
 
-        // Calculate risk scores with HRDD impact
+        // Calculate risk scores with HRDD impact and activity weighting
         const countryRisks = countryData.map(country => {
             const baseRisk = country.base_risk_score;
+            const activityLevel = activityData[country.country];
+            const weight = (activityLevel / totalActivity) * 100;
+            
             let adjustedRisk = baseRisk * industryData.risk_multiplier * hrddMultiplier;
             adjustedRisk = Math.min(100, Math.round(adjustedRisk));
+            
             return {
                 country: country.country,
                 risk: adjustedRisk,
-                base_risk: baseRisk
+                base_risk: baseRisk,
+                activity_level: activityLevel,
+                weight: weight
             };
         });
 
+        // Calculate weighted overall risk based on activity levels
         const overallRisk = Math.round(
-            countryRisks.reduce((sum, item) => sum + item.risk, 0) / countryRisks.length
+            countryRisks.reduce((sum, item) => sum + (item.risk * item.weight / 100), 0)
         );
 
-        // Save enhanced assessment
+        // Save enhanced assessment with activity data
         const assessment = new Assessment({
             industry,
             countries,
@@ -294,11 +322,15 @@ app.post('/api/calculate-risk', async (req, res) => {
             country_scores: countryRisks.map(cr => ({
                 country: cr.country,
                 risk_score: cr.risk,
-                base_risk_score: cr.base_risk
+                base_risk_score: cr.base_risk,
+                activity_level: cr.activity_level,
+                weight: cr.weight
             })),
             hrdd_strategies: hrdd_strategies || {},
             hrdd_effectiveness: hrdd_effectiveness || {},
-            hrdd_multiplier: hrddMultiplier
+            hrdd_multiplier: hrddMultiplier,
+            activity_data: activityData,
+            total_activity: totalActivity
         });
         await assessment.save();
 
@@ -306,7 +338,8 @@ app.post('/api/calculate-risk', async (req, res) => {
             overall_risk: overallRisk,
             country_risks: countryRisks,
             industry_multiplier: industryData.risk_multiplier,
-            assessment_id: assessment._id
+            assessment_id: assessment._id,
+            total_activity: totalActivity
         };
 
         if (hrddData) {
@@ -321,15 +354,96 @@ app.post('/api/calculate-risk', async (req, res) => {
     }
 });
 
+// Get assessment by ID
+app.get('/api/assessment/:id', async (req, res) => {
+    try {
+        const assessment = await Assessment.findById(req.params.id);
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+        res.json(assessment);
+    } catch (error) {
+        console.error('Error fetching assessment:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get recent assessments (optional - for analytics)
+app.get('/api/assessments/recent', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const assessments = await Assessment.find({})
+            .sort({ created_at: -1 })
+            .limit(limit)
+            .select('-activity_data'); // Exclude large activity data for list view
+        res.json(assessments);
+    } catch (error) {
+        console.error('Error fetching recent assessments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get country details by name or ISO code
+app.get('/api/country/:identifier', async (req, res) => {
+    try {
+        const identifier = req.params.identifier;
+        const country = await Country.findOne({
+            $or: [
+                { country: { $regex: new RegExp(identifier, 'i') } },
+                { iso_code: identifier.toUpperCase() }
+            ]
+        });
+        
+        if (!country) {
+            return res.status(404).json({ error: 'Country not found' });
+        }
+        
+        res.json(country);
+    } catch (error) {
+        console.error('Error fetching country:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get industry details
+app.get('/api/industry/:name', async (req, res) => {
+    try {
+        const industry = await Industry.findOne({ 
+            industry: { $regex: new RegExp(req.params.name, 'i') } 
+        });
+        
+        if (!industry) {
+            return res.status(404).json({ error: 'Industry not found' });
+        }
+        
+        res.json(industry);
+    } catch (error) {
+        console.error('Error fetching industry:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
+});
+
 // Start server
 const startServer = async () => {
     await connectDB();
     await seedDatabase();
     
     app.listen(PORT, () => {
-        console.log(`Labor Rights Risk API running on port ${PORT}`);
+        console.log(`Enhanced Labor Rights Risk API running on port ${PORT}`);
         console.log(`Health check: http://localhost:${PORT}/health`);
         console.log(`API base URL: http://localhost:${PORT}/api`);
+        console.log('Features: Activity Volume Weighting, HRDD Strategies, Enhanced Analytics');
     });
 };
 
