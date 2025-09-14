@@ -239,11 +239,17 @@
                     .attr('d', path)
                     .on('mouseenter', (event, d) => this.showTooltip(event, d3.select(event.currentTarget).attr('data-country')))
                     .on('mousemove', (event) => this.updateTooltipPosition(event))
-                    .on('mouseleave', () => this.hideTooltip())
+                     .on('mouseleave', () => this.hideTooltip())
                     .on('click', (event) => this.toggleCountrySelection(
                         d3.select(event.currentTarget).attr('data-country'),
                         event.currentTarget
                     ));
+
+                // Remove placeholder when map loads successfully
+                const placeholder = document.getElementById('map-placeholder');
+                if (placeholder) {
+                    placeholder.remove();
+                }
             } catch (error) {
                 console.log('World map initialization failed:', error);
                 this.showFallbackMessage();
