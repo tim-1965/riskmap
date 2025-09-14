@@ -3,24 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>World Map Risk Visualization</title>
+    <title>Labor Rights Risk Assessment - World Choropleth Map</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson@3"></script>
     <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+            transition: border-color 0.3s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .country-selector {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+
+        .country-checkbox {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .country-checkbox:hover {
+            background-color: #f1f3f4;
+        }
+
+        .country-checkbox input {
+            margin-right: 10px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 30px;
+            padding: 30px;
+        }
+
         .map-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            padding: 20px;
+            position: relative;
+        }
+
+        #world-map {
             width: 100%;
             height: 500px;
             border: 2px solid #e9ecef;
             border-radius: 8px;
             background: #f8f9fa;
             overflow: hidden;
-            position: relative;
         }
 
-        .world-map-svg {
-            width: 100%;
-            height: 100%;
-        }
-
-        .country-path {
+        .country {
             fill: #e9ecef;
             stroke: #fff;
             stroke-width: 0.5;
@@ -28,265 +149,567 @@
             transition: all 0.3s ease;
         }
 
-        .country-path:hover {
+        .country:hover {
             stroke-width: 2;
             stroke: #667eea;
         }
 
-        .country-path.selected {
+        .country.selected {
             stroke: #2c3e50;
             stroke-width: 2;
         }
 
         /* Risk level colors */
-        .country-path.risk-very-low { fill: #28a745; }
-        .country-path.risk-low { fill: #6f42c1; }
-        .country-path.risk-medium { fill: #ffc107; }
-        .country-path.risk-high { fill: #ff6b35; }
-        .country-path.risk-very-high { fill: #dc3545; }
+        .risk-very-low { fill: #28a745; }
+        .risk-low { fill: #6f42c1; }
+        .risk-medium { fill: #ffc107; }
+        .risk-high { fill: #fd7e14; }
+        .risk-very-high { fill: #dc3545; }
 
         .tooltip {
             position: absolute;
             background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 8px 12px;
-            border-radius: 4px;
+            padding: 12px;
+            border-radius: 6px;
             pointer-events: none;
             font-size: 14px;
             z-index: 1000;
             opacity: 0;
             transition: opacity 0.3s;
+            max-width: 200px;
+        }
+
+        .risk-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            padding: 25px;
+            height: fit-content;
+        }
+
+        .risk-score {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .score-display {
+            font-size: 4em;
+            font-weight: 700;
+            margin: 20px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .score-label {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .risk-level {
+            font-size: 1.1em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .legend {
+            margin-top: 30px;
+        }
+
+        .legend h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-size: 1.2em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .country-list {
+            margin-top: 20px;
+        }
+
+        .country-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 5px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .country-risk {
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+
+        /* Risk level colors for text */
+        .low-risk { 
+            color: #28a745; 
+            background-color: rgba(40, 167, 69, 0.1); 
+        }
+
+        .medium-risk { 
+            color: #ffc107; 
+            background-color: rgba(255, 193, 7, 0.1); 
+        }
+
+        .high-risk { 
+            color: #dc3545; 
+            background-color: rgba(220, 53, 69, 0.1); 
+        }
+
+        .very-high-risk { 
+            color: #6f42c1; 
+            background-color: rgba(111, 66, 193, 0.1); 
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 18px;
+            color: #6c757d;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="map-container" id="world-map-container">
-        <svg class="world-map-svg" id="world-map-svg" viewBox="0 0 1000 500">
-            <!-- Simplified world map paths -->
-            <!-- United States -->
-            <path class="country-path" data-country="United States" d="M150,200 L250,180 L280,220 L250,250 L150,240 Z"/>
-            
-            <!-- Canada -->
-            <path class="country-path" data-country="Canada" d="M150,150 L280,140 L300,180 L280,200 L150,190 Z"/>
-            
-            <!-- Mexico -->
-            <path class="country-path" data-country="Mexico" d="M150,250 L200,240 L220,280 L180,290 L150,270 Z"/>
-            
-            <!-- Brazil -->
-            <path class="country-path" data-country="Brazil" d="M200,320 L280,310 L300,380 L220,390 L200,350 Z"/>
-            
-            <!-- United Kingdom -->
-            <path class="country-path" data-country="United Kingdom" d="M480,180 L500,175 L505,195 L485,200 Z"/>
-            
-            <!-- Germany -->
-            <path class="country-path" data-country="Germany" d="M520,190 L540,185 L545,205 L525,210 Z"/>
-            
-            <!-- France -->
-            <path class="country-path" data-country="France" d="M500,200 L520,195 L525,215 L505,220 Z"/>
-            
-            <!-- Italy -->
-            <path class="country-path" data-country="Italy" d="M530,220 L545,215 L550,240 L535,245 Z"/>
-            
-            <!-- Spain -->
-            <path class="country-path" data-country="Spain" d="M480,220 L510,215 L515,235 L485,240 Z"/>
-            
-            <!-- China -->
-            <path class="country-path" data-country="China" d="M700,200 L800,190 L820,250 L720,260 L700,230 Z"/>
-            
-            <!-- India -->
-            <path class="country-path" data-country="India" d="M650,250 L720,240 L740,300 L670,310 L650,280 Z"/>
-            
-            <!-- Japan -->
-            <path class="country-path" data-country="Japan" d="M820,200 L850,195 L855,220 L825,225 Z"/>
-            
-            <!-- South Korea -->
-            <path class="country-path" data-country="South Korea" d="M800,210 L815,208 L818,225 L803,227 Z"/>
-            
-            <!-- Australia -->
-            <path class="country-path" data-country="Australia" d="M750,350 L850,340 L870,390 L770,400 L750,380 Z"/>
-            
-            <!-- Bangladesh -->
-            <path class="country-path" data-country="Bangladesh" d="M720,260 L735,258 L738,275 L723,277 Z"/>
-            
-            <!-- Vietnam -->
-            <path class="country-path" data-country="Vietnam" d="M750,270 L765,268 L768,290 L753,292 Z"/>
-            
-            <!-- Thailand -->
-            <path class="country-path" data-country="Thailand" d="M730,280 L745,278 L748,295 L733,297 Z"/>
-            
-            <!-- Philippines -->
-            <path class="country-path" data-country="Philippines" d="M780,280 L795,278 L798,300 L783,302 Z"/>
-            
-            <!-- Indonesia -->
-            <path class="country-path" data-country="Indonesia" d="M720,310 L780,305 L800,330 L740,335 L720,325 Z"/>
-            
-            <!-- Turkey -->
-            <path class="country-path" data-country="Turkey" d="M550,210 L580,205 L585,225 L555,230 Z"/>
-            
-            <!-- Egypt -->
-            <path class="country-path" data-country="Egypt" d="M540,260 L565,255 L570,280 L545,285 Z"/>
-            
-            <!-- South Africa -->
-            <path class="country-path" data-country="South Africa" d="M520,380 L570,375 L585,410 L535,415 L520,395 Z"/>
-        </svg>
-        
-        <div class="tooltip" id="map-tooltip"></div>
+    <div class="container">
+        <div class="header">
+            <h1>Labor Rights Risk Assessment Tool</h1>
+            <p>Interactive World Choropleth Map</p>
+        </div>
+
+        <div class="controls">
+            <div>
+                <div class="error-message" id="error-message"></div>
+                
+                <div class="control-group">
+                    <label for="industry">Select Your Industry:</label>
+                    <select id="industry">
+                        <option value="">Choose an industry</option>
+                        <option value="agriculture">Agriculture</option>
+                        <option value="mining">Mining</option>
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="textiles">Textiles</option>
+                        <option value="electronics">Electronics</option>
+                        <option value="automotive">Automotive</option>
+                        <option value="construction">Construction</option>
+                        <option value="energy">Energy</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="finance">Finance</option>
+                        <option value="retail">Retail</option>
+                        <option value="hospitality">Hospitality</option>
+                        <option value="logistics">Logistics</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Selected Countries:</label>
+                    <div class="country-selector" id="country-selector">
+                        <div class="loading">Click on countries in the map to select...</div>
+                    </div>
+                </div>
+
+                <button class="btn" onclick="calculateRisk()" id="calculate-btn">
+                    Calculate Risk Assessment
+                </button>
+            </div>
+
+            <div>
+                <div class="legend">
+                    <h3>Risk Levels</h3>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #28a745;"></div>
+                        <span>Very Low Risk (1-20)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #6f42c1;"></div>
+                        <span>Low Risk (21-40)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ffc107;"></div>
+                        <span>Medium Risk (41-60)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #fd7e14;"></div>
+                        <span>High Risk (61-80)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #dc3545;"></div>
+                        <span>Very High Risk (81-100)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="map-container">
+                <div id="world-map">
+                    <div class="loading">Loading world map...</div>
+                </div>
+                <div class="tooltip" id="tooltip"></div>
+            </div>
+
+            <div class="risk-panel">
+                <div class="risk-score">
+                    <div class="score-label">Overall Risk Score</div>
+                    <div class="score-display" id="risk-score">--</div>
+                    <div class="risk-level" id="risk-level">Select countries to analyze</div>
+                </div>
+
+                <div class="country-list" id="country-risk-list">
+                    <!-- Country risks will be displayed here -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        class WorldMapComponent {
-            constructor(containerId) {
-                this.container = document.getElementById(containerId);
-                this.svg = document.getElementById('world-map-svg');
-                this.tooltip = document.getElementById('map-tooltip');
-                this.countryPaths = this.svg.querySelectorAll('.country-path');
-                this.riskData = new Map();
-                this.selectedCountries = new Set();
-                
-                this.init();
-            }
-            
-            init() {
-                this.countryPaths.forEach(path => {
-                    const countryName = path.getAttribute('data-country');
-                    
-                    // Mouse events for tooltip
-                    path.addEventListener('mouseenter', (e) => {
-                        this.showTooltip(e, countryName);
+        // Global variables
+        let svg, g, projection, path, tooltip;
+        let selectedCountries = new Set();
+        let countryData = new Map();
+        let riskData = new Map();
+
+        // Country risk data
+        const baseRiskData = {
+            'United States': 22, 'Canada': 16, 'Mexico': 52, 'Brazil': 45,
+            'United Kingdom': 18, 'Germany': 15, 'France': 23, 'Italy': 28,
+            'Spain': 26, 'China': 65, 'India': 58, 'Japan': 17,
+            'South Korea': 25, 'Australia': 16, 'Bangladesh': 82,
+            'Vietnam': 55, 'Thailand': 62, 'Philippines': 75,
+            'Indonesia': 58, 'Turkey': 62, 'Egypt': 78,
+            'South Africa': 42, 'Russia': 78, 'Norway': 10,
+            'Sweden': 11, 'Finland': 12, 'Denmark': 8,
+            'Netherlands': 14, 'Pakistan': 72, 'Nigeria': 75,
+            'Myanmar': 95, 'Qatar': 68, 'Saudi Arabia': 72,
+            'United Arab Emirates': 58
+        };
+
+        // Industry multipliers
+        const industryMultipliers = {
+            'agriculture': 1.4, 'mining': 1.5, 'manufacturing': 1.2,
+            'textiles': 1.6, 'electronics': 1.3, 'automotive': 1.1,
+            'construction': 1.4, 'energy': 1.3, 'healthcare': 0.9,
+            'finance': 0.8, 'retail': 1.1, 'hospitality': 1.3,
+            'logistics': 1.2
+        };
+
+        // Country name mapping for TopoJSON
+        const countryNameMap = {
+            'United States of America': 'United States',
+            'United Kingdom': 'United Kingdom',
+            'Russian Federation': 'Russia',
+            'Korea': 'South Korea',
+            'Viet Nam': 'Vietnam'
+        };
+
+        function initMap() {
+            const width = 1000;
+            const height = 500;
+
+            // Create SVG
+            svg = d3.select("#world-map")
+                .html("") // Clear loading message
+                .append("svg")
+                .attr("width", "100%")
+                .attr("height", "100%")
+                .attr("viewBox", `0 0 ${width} ${height}`);
+
+            // Create tooltip
+            tooltip = d3.select("#tooltip");
+
+            // Set up projection and path
+            projection = d3.geoNaturalEarth1()
+                .scale(150)
+                .translate([width / 2, height / 2]);
+
+            path = d3.geoPath().projection(projection);
+
+            g = svg.append("g");
+
+            // Load world data
+            loadWorldData();
+        }
+
+        async function loadWorldData() {
+            try {
+                const world = await d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+                const countries = topojson.feature(world, world.objects.countries).features;
+
+                // Draw countries
+                g.selectAll("path")
+                    .data(countries)
+                    .enter()
+                    .append("path")
+                    .attr("class", "country")
+                    .attr("d", path)
+                    .attr("data-country", d => getCountryName(d.properties.NAME))
+                    .on("click", function(event, d) {
+                        const countryName = getCountryName(d.properties.NAME);
+                        toggleCountrySelection(countryName, this);
+                    })
+                    .on("mouseover", function(event, d) {
+                        const countryName = getCountryName(d.properties.NAME);
+                        showTooltip(event, countryName);
+                        
+                        // Highlight on hover
+                        if (!d3.select(this).classed("selected")) {
+                            d3.select(this).style("stroke", "#667eea").style("stroke-width", "2px");
+                        }
+                    })
+                    .on("mouseout", function(event, d) {
+                        hideTooltip();
+                        
+                        // Remove highlight if not selected
+                        if (!d3.select(this).classed("selected")) {
+                            d3.select(this).style("stroke", "#fff").style("stroke-width", "0.5px");
+                        }
+                    })
+                    .on("mousemove", function(event) {
+                        moveTooltip(event);
                     });
-                    
-                    path.addEventListener('mousemove', (e) => {
-                        this.updateTooltipPosition(e);
-                    });
-                    
-                    path.addEventListener('mouseleave', () => {
-                        this.hideTooltip();
-                    });
-                    
-                    // Click to select/deselect
-                    path.addEventListener('click', () => {
-                        this.toggleCountrySelection(countryName, path);
-                    });
-                });
-            }
-            
-            updateRiskData(riskResults) {
-                // Clear previous risk styling
-                this.countryPaths.forEach(path => {
-                    path.classList.remove('risk-very-low', 'risk-low', 'risk-medium', 'risk-high', 'risk-very-high');
-                });
-                
-                // Update risk data and apply colors
-                riskResults.country_risks.forEach(countryRisk => {
-                    this.riskData.set(countryRisk.country, countryRisk.risk);
-                    
-                    const path = this.findCountryPath(countryRisk.country);
-                    if (path) {
-                        const riskClass = this.getRiskClass(countryRisk.risk);
-                        path.classList.add(riskClass);
-                    }
-                });
-            }
-            
-            findCountryPath(countryName) {
-                return Array.from(this.countryPaths).find(path => 
-                    path.getAttribute('data-country') === countryName
-                );
-            }
-            
-            getRiskClass(riskScore) {
-                if (riskScore <= 20) return 'risk-very-low';
-                if (riskScore <= 40) return 'risk-low';
-                if (riskScore <= 60) return 'risk-medium';
-                if (riskScore <= 80) return 'risk-high';
-                return 'risk-very-high';
-            }
-            
-            toggleCountrySelection(countryName, path) {
-                if (this.selectedCountries.has(countryName)) {
-                    this.selectedCountries.delete(countryName);
-                    path.classList.remove('selected');
-                } else {
-                    this.selectedCountries.add(countryName);
-                    path.classList.add('selected');
-                }
-                
-                // Trigger custom event for parent component
-                this.container.dispatchEvent(new CustomEvent('countrySelectionChanged', {
-                    detail: { 
-                        selectedCountries: Array.from(this.selectedCountries),
-                        country: countryName,
-                        selected: this.selectedCountries.has(countryName)
-                    }
-                }));
-            }
-            
-            setSelectedCountries(countries) {
-                // Clear previous selections
-                this.selectedCountries.clear();
-                this.countryPaths.forEach(path => path.classList.remove('selected'));
-                
-                // Set new selections
-                countries.forEach(countryName => {
-                    this.selectedCountries.add(countryName);
-                    const path = this.findCountryPath(countryName);
-                    if (path) {
-                        path.classList.add('selected');
-                    }
-                });
-            }
-            
-            showTooltip(event, countryName) {
-                const riskScore = this.riskData.get(countryName);
-                let tooltipText = countryName;
-                
-                if (riskScore !== undefined) {
-                    const riskLevel = this.getRiskLevel(riskScore);
-                    tooltipText += `\nRisk Score: ${riskScore}\nRisk Level: ${riskLevel}`;
-                } else {
-                    tooltipText += '\nClick to select for analysis';
-                }
-                
-                this.tooltip.textContent = tooltipText;
-                this.tooltip.style.opacity = '1';
-                this.updateTooltipPosition(event);
-            }
-            
-            updateTooltipPosition(event) {
-                const rect = this.container.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const y = event.clientY - rect.top;
-                
-                this.tooltip.style.left = (x + 10) + 'px';
-                this.tooltip.style.top = (y - 10) + 'px';
-            }
-            
-            hideTooltip() {
-                this.tooltip.style.opacity = '0';
-            }
-            
-            getRiskLevel(riskScore) {
-                if (riskScore <= 20) return 'Very Low';
-                if (riskScore <= 40) return 'Low';
-                if (riskScore <= 60) return 'Medium';
-                if (riskScore <= 80) return 'High';
-                return 'Very High';
+
+                console.log("World map loaded successfully");
+
+            } catch (error) {
+                console.error("Error loading world map:", error);
+                document.getElementById("world-map").innerHTML = 
+                    '<div class="loading">Failed to load world map. Please refresh the page.</div>';
             }
         }
-        
-        // Initialize map when DOM is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            window.worldMap = new WorldMapComponent('world-map-container');
+
+        function getCountryName(name) {
+            return countryNameMap[name] || name;
+        }
+
+        function toggleCountrySelection(countryName, element) {
+            const countryElement = d3.select(element);
             
-            // Example usage:
-            // worldMap.setSelectedCountries(['United States', 'China', 'Germany']);
-            // worldMap.updateRiskData({
-            //     country_risks: [
-            //         { country: 'United States', risk: 22 },
-            //         { country: 'China', risk: 65 },
-            //         { country: 'Germany', risk: 15 }
-            //     ]
-            // });
+            if (selectedCountries.has(countryName)) {
+                // Deselect
+                selectedCountries.delete(countryName);
+                countryElement.classed("selected", false);
+            } else {
+                // Select
+                selectedCountries.add(countryName);
+                countryElement.classed("selected", true);
+            }
+
+            updateSelectedCountriesList();
+        }
+
+        function updateSelectedCountriesList() {
+            const container = document.getElementById("country-selector");
+            if (selectedCountries.size === 0) {
+                container.innerHTML = '<div class="loading">Click on countries in the map to select...</div>';
+            } else {
+                container.innerHTML = '';
+                selectedCountries.forEach(country => {
+                    const div = document.createElement('div');
+                    div.className = 'country-checkbox';
+                    div.innerHTML = `
+                        <span>${country}</span>
+                        <button onclick="removeCountry('${country}')" style="margin-left: auto; background: #dc3545; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer;">×</button>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        }
+
+        function removeCountry(countryName) {
+            selectedCountries.delete(countryName);
+            
+            // Update map selection
+            g.selectAll("path")
+                .filter(function() {
+                    return d3.select(this).attr("data-country") === countryName;
+                })
+                .classed("selected", false);
+                
+            updateSelectedCountriesList();
+        }
+
+        function showTooltip(event, countryName) {
+            const riskScore = riskData.get(countryName);
+            let content = `<strong>${countryName}</strong>`;
+            
+            if (riskScore !== undefined) {
+                const riskLevel = getRiskLevel(riskScore);
+                content += `<br>Risk Score: ${riskScore}<br>Risk Level: ${riskLevel}`;
+            } else if (baseRiskData[countryName]) {
+                content += `<br>Base Risk: ${baseRiskData[countryName]}<br>Click to include in analysis`;
+            } else {
+                content += `<br>Click to select for analysis`;
+            }
+            
+            tooltip.html(content)
+                .style("opacity", 1);
+                
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            tooltip
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+        }
+
+        function hideTooltip() {
+            tooltip.style("opacity", 0);
+        }
+
+        function getRiskLevel(score) {
+            if (score <= 20) return "Very Low";
+            if (score <= 40) return "Low";
+            if (score <= 60) return "Medium";
+            if (score <= 80) return "High";
+            return "Very High";
+        }
+
+        function getRiskClass(score) {
+            if (score <= 20) return "risk-very-low";
+            if (score <= 40) return "risk-low";
+            if (score <= 60) return "risk-medium";
+            if (score <= 80) return "risk-high";
+            return "risk-very-high";
+        }
+
+        function getRiskColor(score) {
+            if (score <= 20) return "#28a745";
+            if (score <= 40) return "#6f42c1";
+            if (score <= 60) return "#ffc107";
+            if (score <= 80) return "#fd7e14";
+            return "#dc3545";
+        }
+
+        function calculateRisk() {
+            const industry = document.getElementById("industry").value;
+            const errorEl = document.getElementById("error-message");
+            
+            // Clear previous errors
+            errorEl.style.display = "none";
+            
+            if (!industry) {
+                errorEl.textContent = "Please select an industry.";
+                errorEl.style.display = "block";
+                return;
+            }
+            
+            if (selectedCountries.size === 0) {
+                errorEl.textContent = "Please select at least one country on the map.";
+                errorEl.style.display = "block";
+                return;
+            }
+
+            // Calculate risks
+            const multiplier = industryMultipliers[industry] || 1.2;
+            const countryRisks = [];
+            let totalRisk = 0;
+
+            // Clear previous risk visualization
+            riskData.clear();
+            g.selectAll(".country")
+                .attr("class", "country")
+                .style("fill", "#e9ecef");
+
+            selectedCountries.forEach(countryName => {
+                const baseRisk = baseRiskData[countryName] || 50;
+                const finalRisk = Math.min(100, Math.round(baseRisk * multiplier));
+                
+                riskData.set(countryName, finalRisk);
+                countryRisks.push({ country: countryName, risk: finalRisk });
+                totalRisk += finalRisk;
+            });
+
+            const averageRisk = Math.round(totalRisk / selectedCountries.size);
+
+            // Update map colors
+            g.selectAll(".country")
+                .each(function() {
+                    const countryName = d3.select(this).attr("data-country");
+                    const risk = riskData.get(countryName);
+                    if (risk !== undefined) {
+                        d3.select(this)
+                            .classed(getRiskClass(risk), true)
+                            .style("fill", getRiskColor(risk));
+                    }
+                });
+
+            // Update UI
+            displayResults(averageRisk, countryRisks);
+        }
+
+        function displayResults(overallRisk, countryRisks) {
+            // Update overall risk score
+            document.getElementById("risk-score").textContent = overallRisk;
+            
+            const riskLevelEl = document.getElementById("risk-level");
+            const riskLevel = getRiskLevel(overallRisk);
+            riskLevelEl.textContent = riskLevel;
+            
+            // Apply risk class for styling
+            riskLevelEl.className = "risk-level";
+            if (overallRisk <= 20) riskLevelEl.classList.add("low-risk");
+            else if (overallRisk <= 40) riskLevelEl.classList.add("low-risk");
+            else if (overallRisk <= 60) riskLevelEl.classList.add("medium-risk");
+            else if (overallRisk <= 80) riskLevelEl.classList.add("high-risk");
+            else riskLevelEl.classList.add("very-high-risk");
+
+            // Update country risk list
+            const listEl = document.getElementById("country-risk-list");
+            listEl.innerHTML = '<h3>Country Risk Breakdown</h3>';
+            
+            countryRisks.sort((a, b) => b.risk - a.risk).forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'country-item';
+                
+                let riskClass = 'low-risk';
+                if (item.risk > 80) riskClass = 'very-high-risk';
+                else if (item.risk > 60) riskClass = 'high-risk';
+                else if (item.risk > 40) riskClass = 'medium-risk';
+                
+                div.innerHTML = `
+                    <span>${item.country}</span>
+                    <span class="country-risk ${riskClass}">${item.risk}</span>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        // Initialize the map when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
         });
     </script>
 </body>
