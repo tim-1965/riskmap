@@ -60,6 +60,12 @@ const IndustrySchema = new mongoose.Schema({
     last_updated: { type: Date, default: Date.now }
 });
 
+const IndexSchema = new mongoose.Schema({
+    name: { type: String, required: true, unique: true },
+    values: { type: Map, of: Number },
+    last_updated: { type: Date, default: Date.now }
+});
+
 const AssessmentSchema = new mongoose.Schema({
     session_id: { type: String },
     industry: { type: String, required: true },
@@ -69,23 +75,11 @@ const AssessmentSchema = new mongoose.Schema({
         country: String,
         risk_score: Number,
         base_risk_score: Number,
-        activity_level: { type: Number, default: 10 },
-        weight: { type: Number, default: 0 }
+        activity_level: Number,
+        weight: Number
     }],
-    hrdd_strategies: {
-        continuous_monitoring: { type: Number, default: 0 },
-        unannounced_audit: { type: Number, default: 0 },
-        announced_audit: { type: Number, default: 0 },
-        self_assessment: { type: Number, default: 0 },
-        no_engagement: { type: Number, default: 0 }
-    },
-    hrdd_effectiveness: {
-        continuous_monitoring: { type: Number, default: 85 },
-        unannounced_audit: { type: Number, default: 50 },
-        announced_audit: { type: Number, default: 15 },
-        self_assessment: { type: Number, default: 5 },
-        no_engagement: { type: Number, default: 0 }
-    },
+    hrdd_strategies: { type: Map, of: Number },
+    hrdd_effectiveness: { type: Map, of: Number },
     hrdd_multiplier: { type: Number, default: 1.0 },
     activity_data: { type: Map, of: Number },
     total_activity: { type: Number, default: 0 },
@@ -94,93 +88,11 @@ const AssessmentSchema = new mongoose.Schema({
 
 const Country = mongoose.model('Country', CountrySchema);
 const Industry = mongoose.model('Industry', IndustrySchema);
+const Index = mongoose.model('Index', IndexSchema);
 const Assessment = mongoose.model('Assessment', AssessmentSchema);
 
 // Seed data function with complete dataset
-const seedDatabase = async () => {
-    try {
-        const countryCount = await Country.countDocuments();
-        const industryCount = await Industry.countDocuments();
-        
-        if (countryCount === 0) {
-            console.log('Seeding countries...');
-            const countries = [
-                { country: "Denmark", iso_code: "DK", ituc_rights_rating: 1, corruption_index_ti: 90, migrant_worker_prevalence: "low", education_level: "high", base_risk_score: 8, region: "Europe" },
-                { country: "Finland", iso_code: "FI", ituc_rights_rating: 2, corruption_index_ti: 87, migrant_worker_prevalence: "low", education_level: "high", base_risk_score: 12, region: "Europe" },
-                { country: "Norway", iso_code: "NO", ituc_rights_rating: 1, corruption_index_ti: 84, migrant_worker_prevalence: "low", education_level: "high", base_risk_score: 10, region: "Europe" },
-                { country: "Sweden", iso_code: "SE", ituc_rights_rating: 1, corruption_index_ti: 82, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 11, region: "Europe" },
-                { country: "Germany", iso_code: "DE", ituc_rights_rating: 2, corruption_index_ti: 78, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 15, region: "Europe" },
-                { country: "Netherlands", iso_code: "NL", ituc_rights_rating: 2, corruption_index_ti: 79, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 14, region: "Europe" },
-                { country: "United Kingdom", iso_code: "GB", ituc_rights_rating: 2, corruption_index_ti: 71, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 18, region: "Europe" },
-                { country: "United States", iso_code: "US", ituc_rights_rating: 3, corruption_index_ti: 69, migrant_worker_prevalence: "high", education_level: "high", base_risk_score: 22, region: "Americas" },
-                { country: "Canada", iso_code: "CA", ituc_rights_rating: 2, corruption_index_ti: 76, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 16, region: "Americas" },
-                { country: "Australia", iso_code: "AU", ituc_rights_rating: 2, corruption_index_ti: 76, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 16, region: "Asia-Pacific" },
-                { country: "France", iso_code: "FR", ituc_rights_rating: 3, corruption_index_ti: 71, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 23, region: "Europe" },
-                { country: "Japan", iso_code: "JP", ituc_rights_rating: 2, corruption_index_ti: 73, migrant_worker_prevalence: "low", education_level: "high", base_risk_score: 17, region: "Asia-Pacific" },
-                { country: "South Korea", iso_code: "KR", ituc_rights_rating: 3, corruption_index_ti: 63, migrant_worker_prevalence: "medium", education_level: "high", base_risk_score: 25, region: "Asia-Pacific" },
-                { country: "Italy", iso_code: "IT", ituc_rights_rating: 2, corruption_index_ti: 56, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 28, region: "Europe" },
-                { country: "Spain", iso_code: "ES", ituc_rights_rating: 2, corruption_index_ti: 60, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 26, region: "Europe" },
-                { country: "Brazil", iso_code: "BR", ituc_rights_rating: 4, corruption_index_ti: 36, migrant_worker_prevalence: "low", education_level: "medium", base_risk_score: 45, region: "Americas" },
-                { country: "Mexico", iso_code: "MX", ituc_rights_rating: 4, corruption_index_ti: 31, migrant_worker_prevalence: "high", education_level: "medium", base_risk_score: 52, region: "Americas" },
-                { country: "India", iso_code: "IN", ituc_rights_rating: 4, corruption_index_ti: 39, migrant_worker_prevalence: "medium", education_level: "low", base_risk_score: 58, region: "Asia-Pacific" },
-                { country: "China", iso_code: "CN", ituc_rights_rating: 5, corruption_index_ti: 42, migrant_worker_prevalence: "high", education_level: "medium", base_risk_score: 65, region: "Asia-Pacific" },
-                { country: "Russia", iso_code: "RU", ituc_rights_rating: 5, corruption_index_ti: 22, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 78, region: "Europe" },
-                { country: "Turkey", iso_code: "TR", ituc_rights_rating: 4, corruption_index_ti: 34, migrant_worker_prevalence: "high", education_level: "medium", base_risk_score: 62, region: "MENA" },
-                { country: "Bangladesh", iso_code: "BD", ituc_rights_rating: 5, corruption_index_ti: 24, migrant_worker_prevalence: "high", education_level: "low", base_risk_score: 82, region: "Asia-Pacific" },
-                { country: "Philippines", iso_code: "PH", ituc_rights_rating: 5, corruption_index_ti: 33, migrant_worker_prevalence: "high", education_level: "medium", base_risk_score: 75, region: "Asia-Pacific" },
-                { country: "Myanmar", iso_code: "MM", ituc_rights_rating: 5, corruption_index_ti: 23, migrant_worker_prevalence: "medium", education_level: "low", base_risk_score: 95, region: "Asia-Pacific" },
-                { country: "Egypt", iso_code: "EG", ituc_rights_rating: 5, corruption_index_ti: 30, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 78, region: "MENA" },
-                { country: "Saudi Arabia", iso_code: "SA", ituc_rights_rating: 5, corruption_index_ti: 42, migrant_worker_prevalence: "very_high", education_level: "medium", base_risk_score: 72, region: "MENA" },
-                { country: "Qatar", iso_code: "QA", ituc_rights_rating: 5, corruption_index_ti: 62, migrant_worker_prevalence: "very_high", education_level: "medium", base_risk_score: 68, region: "MENA" },
-                { country: "United Arab Emirates", iso_code: "AE", ituc_rights_rating: 4, corruption_index_ti: 67, migrant_worker_prevalence: "very_high", education_level: "medium", base_risk_score: 58, region: "MENA" },
-                { country: "Vietnam", iso_code: "VN", ituc_rights_rating: 4, corruption_index_ti: 41, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 55, region: "Asia-Pacific" },
-                { country: "Thailand", iso_code: "TH", ituc_rights_rating: 4, corruption_index_ti: 36, migrant_worker_prevalence: "high", education_level: "medium", base_risk_score: 62, region: "Asia-Pacific" },
-                { country: "Indonesia", iso_code: "ID", ituc_rights_rating: 4, corruption_index_ti: 34, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 58, region: "Asia-Pacific" },
-                { country: "Pakistan", iso_code: "PK", ituc_rights_rating: 4, corruption_index_ti: 29, migrant_worker_prevalence: "medium", education_level: "low", base_risk_score: 72, region: "Asia-Pacific" },
-                { country: "Nigeria", iso_code: "NG", ituc_rights_rating: 4, corruption_index_ti: 25, migrant_worker_prevalence: "low", education_level: "low", base_risk_score: 75, region: "Africa" },
-                { country: "South Africa", iso_code: "ZA", ituc_rights_rating: 3, corruption_index_ti: 41, migrant_worker_prevalence: "medium", education_level: "medium", base_risk_score: 42, region: "Africa" }
-            ];
-            await Country.insertMany(countries);
-            console.log('Countries seeded successfully');
-        }
 
-        if (industryCount === 0) {
-            console.log('Seeding industries...');
-            const industries = [
-                { industry: "agriculture", risk_multiplier: 1.4, description: "High seasonal labor, often migrant workers" },
-                { industry: "mining", risk_multiplier: 1.5, description: "Dangerous work, often remote locations" },
-                { industry: "manufacturing", risk_multiplier: 1.2, description: "Standard industrial risks" },
-                { industry: "textiles", risk_multiplier: 1.6, description: "High risk due to supply chain complexity" },
-                { industry: "electronics", risk_multiplier: 1.3, description: "Complex supply chains, precision work" },
-                { industry: "automotive", risk_multiplier: 1.1, description: "Generally well-regulated industry" },
-                { industry: "construction", risk_multiplier: 1.4, description: "High injury rates, temporary workforce" },
-                { industry: "energy", risk_multiplier: 1.3, description: "Infrastructure projects, safety risks" },
-                { industry: "healthcare", risk_multiplier: 0.9, description: "Generally well-regulated, skilled workers" },
-                { industry: "finance", risk_multiplier: 0.8, description: "Low physical risk, regulated sector" },
-                { industry: "retail", risk_multiplier: 1.1, description: "Service sector, varied skill levels" },
-                { industry: "hospitality", risk_multiplier: 1.3, description: "Service industry, often migrant workers" },
-                { industry: "logistics", risk_multiplier: 1.2, description: "Transportation risks, varied conditions" },
-                { industry: "chemicals", risk_multiplier: 1.3, description: "Safety hazards, technical requirements" },
-                { industry: "telecommunications", risk_multiplier: 0.9, description: "Technology sector, skilled workforce" }
-            ];
-            await Industry.insertMany(industries);
-            console.log('Industries seeded successfully');
-        }
-
-        console.log('Database seeding completed');
-    } catch (error) {
-        console.error('Error seeding database:', error);
-    }
-};
-
-// API Routes
-
-// Health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Get all countries
 app.get('/api/countries', async (req, res) => {
     try {
         const countries = await Country.find({}, '-_id -__v').sort({ country: 1 });
@@ -213,17 +125,21 @@ app.post('/api/calculate-risk', async (req, res) => {
             });
         }
 
-        // Validate and process activity volumes (default to 10 if not provided)
+        // Fetch default activity level from database
+        const activityIndex = await Index.findOne({ name: 'activity_level' });
+        const defaultActivity = activityIndex ? activityIndex.values.get('default') : 10;
+
+        // Validate and process activity volumes
         let activityData = {};
         if (activity_volumes && typeof activity_volumes === 'object') {
             // Ensure all countries have activity volumes and they're valid numbers
             countries.forEach(country => {
-                activityData[country] = Math.max(1, Number(activity_volumes[country]) || 10);
+                activityData[country] = Math.max(1, Number(activity_volumes[country]) || defaultActivity);
             });
         } else {
-            // Default all countries to activity level 10
+            // Default all countries to activity level from database
             countries.forEach(country => {
-                activityData[country] = 10;
+                activityData[country] = defaultActivity;
             });
         }
 
@@ -233,6 +149,7 @@ app.post('/api/calculate-risk', async (req, res) => {
         // Validate HRDD strategies if provided
         let hrddMultiplier = 1.0;
         let hrddData = null;
+        let usedEffectiveness = null;
 
         if (hrdd_strategies) {
             const totalPercentage = Object.values(hrdd_strategies).reduce((sum, val) => sum + val, 0);
@@ -242,17 +159,11 @@ app.post('/api/calculate-risk', async (req, res) => {
                 });
             }
 
-            // Default effectiveness values
-            const defaultEffectiveness = {
-                'continuous_monitoring': 85,
-                'unannounced_audit': 50,
-                'announced_audit': 15,
-                'self_assessment': 5,
-                'no_engagement': 0
-            };
-
-            // Use custom effectiveness if provided, otherwise use defaults
+            // Use default effectiveness from database if custom values not provided
+            const hrddIndex = await Index.findOne({ name: 'hrdd_effectiveness' });
+            const defaultEffectiveness = hrddIndex ? Object.fromEntries(hrddIndex.values) : {};
             const effectiveness = hrdd_effectiveness || defaultEffectiveness;
+            usedEffectiveness = effectiveness;
 
             let totalEffectiveness = 0;
             Object.entries(hrdd_strategies).forEach(([strategy, percentage]) => {
@@ -327,7 +238,7 @@ app.post('/api/calculate-risk', async (req, res) => {
                 weight: cr.weight
             })),
             hrdd_strategies: hrdd_strategies || {},
-            hrdd_effectiveness: hrdd_effectiveness || {},
+            hrdd_effectiveness: usedEffectiveness || {},
             hrdd_multiplier: hrddMultiplier,
             activity_data: activityData,
             total_activity: totalActivity
@@ -437,8 +348,7 @@ app.use('*', (req, res) => {
 // Start server
 const startServer = async () => {
     await connectDB();
-    await seedDatabase();
-    
+
     app.listen(PORT, () => {
         console.log(`Enhanced Labor Rights Risk API running on port ${PORT}`);
         console.log(`Health check: http://localhost:${PORT}/health`);
