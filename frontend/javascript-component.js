@@ -330,14 +330,18 @@
             this.container.node().dispatchEvent(event);
         }
 
-        setSelectedCountries(countries) {
+         setSelectedCountries(countries) {
             if (!this.svg) return;
-            
+
             this.selectedCountries = new Set(countries);
             this.svg.selectAll('.country-path').each((d, i, nodes) => {
                 const name = d3.select(nodes[i]).attr('data-country');
                 d3.select(nodes[i]).classed('selected', this.selectedCountries.has(name));
             });
+        }
+
+        getSelectedCountries() {
+            return Array.from(this.selectedCountries);
         }
     }
 
