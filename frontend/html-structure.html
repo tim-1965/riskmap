@@ -15,27 +15,77 @@
                 <span id="api-status-text">Checking API...</span>
             </div>
             <h1>Labor Rights Risk Assessment Tool</h1>
-            <p>Real-time data from ITUC Global Rights Index, Transparency International, and ILO</p>
+            <p>Enhanced with activity volume weighting and interactive map selection</p>
         </div>
 
-        <div class="controls">
-            <div class="error-message" id="error-message"></div>
-            
+        <!-- Top controls: Industry selection and Calculate button -->
+        <div class="top-controls">
             <div class="control-group">
                 <label for="industry">Select Your Industry:</label>
                 <select id="industry">
                     <option value="">Loading industries...</option>
                 </select>
             </div>
+            
+            <button class="btn" onclick="calculateRisk()" id="calculate-btn" disabled>
+                Loading Data...
+            </button>
+        </div>
 
-            <div class="control-group">
-                <label for="countries">Select Countries (Operations/Supply Chain):</label>
-                <div class="country-selector" id="country-selector">
-                    <div class="loading">Loading countries...</div>
+        <div class="error-message" id="error-message"></div>
+
+        <!-- World Map Section -->
+        <div class="map-section">
+            <div class="map-container">
+                <div id="world-map">
+                    <div class="map-placeholder" id="map-placeholder">
+                        <div>
+                            <h3 style="margin-bottom: 15px;">Interactive Risk Map</h3>
+                            <p>Click countries on the map to select them for analysis</p>
+                            <div id="map-results" style="margin-top: 20px; text-align: left; max-height: 400px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="control-group">
+        <!-- Selected Countries Section -->
+        <div class="countries-section">
+            <div class="countries-header">
+                <h3>Selected Countries & Activity Levels</h3>
+                <div class="add-country-controls">
+                    <select id="country-add-dropdown" class="country-add-dropdown">
+                        <option value="">Add country manually...</option>
+                    </select>
+                    <button class="btn btn-add" onclick="addCountryFromDropdown()">Add</button>
+                </div>
+            </div>
+            
+            <div class="countries-table-container">
+                <table class="countries-table" id="countries-table">
+                    <thead>
+                        <tr>
+                            <th>Country</th>
+                            <th>Activity Level</th>
+                            <th>Weight %</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="countries-table-body">
+                        <tr>
+                            <td colspan="4" class="empty-countries">
+                                No countries selected. Click on the map or use the dropdown above to add countries.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="main-content">
+            <!-- HRDD Controls -->
+            <div class="hrdd-controls">
                 <label>Human Rights Due Diligence (HRDD) Strategy:</label>
                 <div class="hrdd-container">
                     <div class="hrdd-note">
@@ -177,24 +227,7 @@
                 </div>
             </div>
 
-            <button class="btn" onclick="calculateRisk()" id="calculate-btn" disabled>
-                Loading Data...
-            </button>
-        </div>
-
-        <div class="main-content">
-            <div class="map-container">
-                <div id="world-map">
-                    <div class="map-placeholder" id="map-placeholder">
-                        <div>
-                            <h3 style="margin-bottom: 15px;">Interactive Risk Map</h3>
-                            <p>Select countries and calculate risk to see the color-coded visualization</p>
-                            <div id="map-results" style="margin-top: 20px; text-align: left; max-height: 400px; overflow-y: auto;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+            <!-- Risk Panel -->
             <div class="risk-panel">
                 <div class="risk-score">
                     <div class="score-label">Overall Risk Score</div>

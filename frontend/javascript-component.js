@@ -1,6 +1,6 @@
 /**
- * Labor Rights Risk Assessment Tool - JavaScript Component
- * Handles all functionality including API calls, UI interactions, and risk calculations
+ * Labor Rights Risk Assessment Tool - Complete Enhanced JavaScript Component
+ * Handles all functionality including API calls, UI interactions, risk calculations, and activity volume weighting
  */
 
 (function() {
@@ -16,6 +16,7 @@
     let usingFallbackData = false;
     let currentRiskData = null;
     let worldMapComponent = null;
+    let selectedCountriesData = new Map(); // country -> {name, activityLevel}
 
     const sliderIds = ['continuous-monitoring', 'unannounced-audit', 'announced-audit', 'self-assessment', 'no-engagement'];
     const defaultEffectiveness = {
@@ -119,7 +120,7 @@
         return fallbackIndustries.map(i => i.industry).sort();
     }
 
-    async function calculateRiskAPI(industry, countries, hrddStrategies, hrddEffectiveness) {
+    async function calculateRiskAPI(industry, countriesWithActivity, hrddStrategies, hrddEffectiveness) {
         if (!usingFallbackData) {
             try {
                 const response = await fetch(`${API_BASE_URL}/calculate-risk`, {
@@ -129,7 +130,8 @@
                     },
                     body: JSON.stringify({
                         industry: industry,
-                        countries: countries,
+                        countries: Object.keys(countriesWithActivity),
+                        activity_volumes: countriesWithActivity,
                         hrdd_strategies: hrddStrategies,
                         hrdd_effectiveness: hrddEffectiveness
                     }),
@@ -143,11 +145,11 @@
             }
         }
 
-        // Fallback calculation
-        return calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness);
+        // Fallback calculation with activity volume weighting
+        return calculateRiskFallback(industry, countriesWithActivity, hrddStrategies, hrddEffectiveness);
     }
 
-    function calculateRiskFallback(industry, countries, hrddStrategies, hrddEffectiveness) {
+    function calculateRiskFallback(industry, countriesWithActivity, hrddStrategies, hrddEffectiveness) {
         // Get industry multiplier
         const industryData = fallbackIndustries.find(i => i.industry.toLowerCase() === industry.toLowerCase());
         const industryMultiplier = industryData ? industryData.risk_multiplier : 1.2;
@@ -161,19 +163,27 @@
 
         const hrddMultiplier = Math.max(0.5, Math.min(1.5, 1.5 - (weighted / 100)));
 
-        // Calculate country risks
-        const countryRisks = countries.map(country => {
+        // Calculate total activity volume
+        const totalActivity = Object.values(countriesWithActivity).reduce((sum, vol) => sum + vol, 0);
+
+        // Calculate country risks with activity weighting
+        const countryRisks = Object.entries(countriesWithActivity).map(([country, activityLevel]) => {
             const countryData = fallbackCountries.find(c => c.country === country);
             const baseRisk = countryData ? countryData.base_risk : 50;
             const finalRisk = Math.max(0, Math.min(100, Math.round(baseRisk * industryMultiplier * hrddMultiplier)));
 
             return {
                 country: country,
-                risk: finalRisk
+                risk: finalRisk,
+                activity_level: activityLevel,
+                weight: (activityLevel / totalActivity) * 100
             };
         });
 
-        const overallRisk = Math.round(countryRisks.reduce((sum, item) => sum + item.risk, 0) / countryRisks.length);
+        // Calculate weighted overall risk
+        const overallRisk = Math.round(
+            countryRisks.reduce((sum, item) => sum + (item.risk * item.weight / 100), 0)
+        );
 
         return {
             overall_risk: overallRisk,
@@ -206,7 +216,7 @@
             this.selectedCountries = new Set();
             this.riskData = new Map();
             this.width = this.container.node().clientWidth || 1000;
-            this.height = 500;
+            this.height = 400;
 
             this.init();
         }
@@ -239,7 +249,7 @@
                     .attr('d', path)
                     .on('mouseenter', (event, d) => this.showTooltip(event, d3.select(event.currentTarget).attr('data-country')))
                     .on('mousemove', (event) => this.updateTooltipPosition(event))
-                     .on('mouseleave', () => this.hideTooltip())
+                    .on('mouseleave', () => this.hideTooltip())
                     .on('click', (event) => this.toggleCountrySelection(
                         d3.select(event.currentTarget).attr('data-country'),
                         event.currentTarget
@@ -257,7 +267,7 @@
         }
 
         showFallbackMessage() {
-            this.container.html('<div class="map-placeholder">World map unavailable - using fallback country list</div>');
+            this.container.html('<div class="map-placeholder">World map unavailable - use dropdown to add countries</div>');
         }
 
         updateRiskData(riskResults) {
@@ -296,8 +306,22 @@
         }
 
         showTooltip(event, countryName) {
+            if (!countryName) return;
+            
             const risk = this.riskData.get(countryName);
-            const text = risk !== undefined ? `${countryName}: ${risk}` : countryName;
+            let text = countryName;
+            
+            if (selectedCountriesData.has(countryName)) {
+                const data = selectedCountriesData.get(countryName);
+                text += ` (Activity: ${data.activityLevel})`;
+            }
+            
+            if (risk !== undefined) {
+                text += ` - Risk: ${risk}`;
+            } else {
+                text += ' - Click to select';
+            }
+            
             this.tooltip.style('opacity', 1).text(text);
             this.updateTooltipPosition(event);
         }
@@ -313,24 +337,17 @@
         }
 
         toggleCountrySelection(countryName, pathElement) {
-            if (!countryName || !pathElement) return;
+            if (!countryName || !pathElement || !countriesData.includes(countryName)) return;
             
             const path = d3.select(pathElement);
-            if (this.selectedCountries.has(countryName)) {
-                this.selectedCountries.delete(countryName);
-                path.classed('selected', false);
+            if (selectedCountriesData.has(countryName)) {
+                removeCountry(countryName);
             } else {
-                this.selectedCountries.add(countryName);
-                path.classed('selected', true);
+                addCountry(countryName);
             }
-
-            const event = new CustomEvent('countrySelectionChanged', {
-                detail: { selectedCountries: Array.from(this.selectedCountries) }
-            });
-            this.container.node().dispatchEvent(event);
         }
 
-         setSelectedCountries(countries) {
+        setSelectedCountries(countries) {
             if (!this.svg) return;
 
             this.selectedCountries = new Set(countries);
@@ -342,6 +359,104 @@
 
         getSelectedCountries() {
             return Array.from(this.selectedCountries);
+        }
+    }
+
+    /**
+     * Country Management Functions
+     */
+    function addCountry(countryName, activityLevel = 10) {
+        if (!countryName || selectedCountriesData.has(countryName)) return;
+        
+        selectedCountriesData.set(countryName, {
+            name: countryName,
+            activityLevel: activityLevel
+        });
+        
+        updateCountriesTable();
+        updateMapSelection();
+    }
+
+    function removeCountry(countryName) {
+        selectedCountriesData.delete(countryName);
+        updateCountriesTable();
+        updateMapSelection();
+    }
+
+    function updateCountryActivity(countryName, newActivityLevel) {
+        if (selectedCountriesData.has(countryName)) {
+            const countryData = selectedCountriesData.get(countryName);
+            countryData.activityLevel = Math.max(1, Number(newActivityLevel) || 1);
+            selectedCountriesData.set(countryName, countryData);
+            updateCountriesTable();
+        }
+    }
+
+    function updateCountriesTable() {
+        const tableBody = document.getElementById('countries-table-body');
+        if (!tableBody) return;
+
+        if (selectedCountriesData.size === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="empty-countries">
+                        No countries selected. Click on the map or use the dropdown above to add countries.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        // Calculate total activity and sort countries
+        const totalActivity = Array.from(selectedCountriesData.values())
+            .reduce((sum, data) => sum + data.activityLevel, 0);
+
+        const sortedCountries = Array.from(selectedCountriesData.entries())
+            .sort((a, b) => {
+                // Sort by activity level first (descending), then alphabetically
+                if (b[1].activityLevel !== a[1].activityLevel) {
+                    return b[1].activityLevel - a[1].activityLevel;
+                }
+                return a[1].name.localeCompare(b[1].name);
+            });
+
+        tableBody.innerHTML = sortedCountries
+            .map(([countryName, data]) => {
+                const weight = ((data.activityLevel / totalActivity) * 100).toFixed(1);
+                return `
+                    <tr>
+                        <td><strong>${data.name}</strong></td>
+                        <td>
+                            <input type="number" 
+                                   value="${data.activityLevel}" 
+                                   min="1" 
+                                   class="activity-input"
+                                   onchange="updateCountryActivity('${countryName}', this.value)">
+                        </td>
+                        <td>${weight}%</td>
+                        <td>
+                            <button class="remove-btn" onclick="removeCountry('${countryName}')">Remove</button>
+                        </td>
+                    </tr>
+                `;
+            })
+            .join('');
+    }
+
+    function updateMapSelection() {
+        if (worldMapComponent) {
+            const selectedCountries = Array.from(selectedCountriesData.keys());
+            worldMapComponent.setSelectedCountries(selectedCountries);
+        }
+    }
+
+    function addCountryFromDropdown() {
+        const dropdown = document.getElementById('country-add-dropdown');
+        const countryName = dropdown.value;
+        
+        if (countryName && !selectedCountriesData.has(countryName)) {
+            addCountry(countryName);
+            dropdown.value = '';
         }
     }
 
@@ -365,49 +480,17 @@
     }
 
     async function populateCountries() {
-        const container = document.getElementById('country-selector');
-        if (!container) return;
+        const dropdown = document.getElementById('country-add-dropdown');
+        if (!dropdown) return;
 
-        container.innerHTML = '<div class="loading">Loading countries...</div>';
         countriesData = await fetchCountries();
 
-        container.innerHTML = '';
+        dropdown.innerHTML = '<option value="">Add country manually...</option>';
         countriesData.forEach(country => {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'country-checkbox';
-
-            const input = document.createElement('input');
-            input.type = 'checkbox';
-            input.value = country;
-            input.id = 'country-' + country.replace(/\s+/g, '-').toLowerCase();
-
-            const label = document.createElement('label');
-            label.setAttribute('for', input.id);
-            label.textContent = country;
-
-            // Add event listener for map sync
-            input.addEventListener('change', () => {
-                if (worldMapComponent) {
-                    const selectedCountries = getSelectedCountries();
-                    worldMapComponent.setSelectedCountries(selectedCountries);
-                }
-            });
-
-            wrapper.appendChild(input);
-            wrapper.appendChild(label);
-            container.appendChild(wrapper);
-        });
-    }
-
-    function getSelectedCountries() {
-        return Array.from(document.querySelectorAll('#country-selector input:checked'))
-            .map(cb => cb.value);
-    }
-
-    function setSelectedCountries(countries) {
-        const checkboxes = document.querySelectorAll('#country-selector input[type="checkbox"]');
-        checkboxes.forEach(cb => {
-            cb.checked = countries.includes(cb.value);
+            const option = document.createElement('option');
+            option.value = country;
+            option.textContent = country;
+            dropdown.appendChild(option);
         });
     }
 
@@ -590,7 +673,6 @@
      * Risk Calculation and Display
      */
     async function calculateRisk() {
-        const selectedCountries = getSelectedCountries();
         const selectedIndustry = document.getElementById('industry').value;
         const errorEl = document.getElementById('error-message');
 
@@ -607,7 +689,7 @@
             return;
         }
 
-        if (selectedCountries.length === 0) {
+        if (selectedCountriesData.size === 0) {
             if (errorEl) {
                 errorEl.textContent = 'Please select at least one country.';
                 errorEl.style.display = 'block';
@@ -638,8 +720,14 @@
             return;
         }
 
+        // Prepare countries with activity data
+        const countriesWithActivity = {};
+        selectedCountriesData.forEach((data, countryName) => {
+            countriesWithActivity[countryName] = data.activityLevel;
+        });
+
         try {
-            const result = await calculateRiskAPI(selectedIndustry, selectedCountries, hrddStrategies, hrddEffectiveness);
+            const result = await calculateRiskAPI(selectedIndustry, countriesWithActivity, hrddStrategies, hrddEffectiveness);
             currentRiskData = result;
             displayResults(result);
         } catch (error) {
@@ -681,7 +769,7 @@
         // Update country list
         const listEl = document.getElementById('country-risk-list');
         if (listEl) {
-            listEl.innerHTML = '';
+            listEl.innerHTML = '<h3>Country Risk Breakdown</h3>';
             result.country_risks.forEach(countryRisk => {
                 const item = document.createElement('div');
                 item.className = 'country-item';
@@ -691,8 +779,10 @@
                 else if (countryRisk.risk > 60) riskClass = 'high-risk';
                 else if (countryRisk.risk > 40) riskClass = 'medium-risk';
 
+                const weight = countryRisk.weight ? ` (${countryRisk.weight.toFixed(1)}% weight)` : '';
+
                 item.innerHTML = `
-                    <span>${countryRisk.country}</span>
+                    <span>${countryRisk.country}${weight}</span>
                     <span class="country-risk ${riskClass}">${countryRisk.risk.toFixed(0)}</span>
                 `;
                 listEl.appendChild(item);
@@ -713,7 +803,8 @@
                 result.country_risks.forEach(countryRisk => {
                     const item = document.createElement('div');
                     item.style.marginBottom = '5px';
-                    item.innerHTML = `<strong>${countryRisk.country}:</strong> ${countryRisk.risk}`;
+                    const weight = countryRisk.weight ? ` (${countryRisk.weight.toFixed(1)}% weight)` : '';
+                    item.innerHTML = `<strong>${countryRisk.country}${weight}:</strong> ${countryRisk.risk}`;
                     resultsDiv.appendChild(item);
                 });
             }
@@ -730,13 +821,6 @@
         }
 
         worldMapComponent = new WorldMapComponent('world-map');
-
-        const mapContainer = document.getElementById('world-map');
-        if (mapContainer) {
-            mapContainer.addEventListener('countrySelectionChanged', (event) => {
-                setSelectedCountries(event.detail.selectedCountries);
-            });
-        }
     }
 
     /**
@@ -752,6 +836,7 @@
         ]);
 
         setupSliders();
+        updateCountriesTable();
 
         // Initialize world map
         initializeWorldMap();
@@ -759,7 +844,7 @@
         const btn = document.getElementById('calculate-btn');
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Calculate Risk';
+            btn.textContent = 'Calculate Risk Assessment';
         }
     }
 
@@ -769,6 +854,10 @@
     window.toggleEffectivenessMode = toggleEffectivenessMode;
     window.calculateRisk = calculateRisk;
     window.loadPreset = loadPreset;
+    window.addCountry = addCountry;
+    window.removeCountry = removeCountry;
+    window.updateCountryActivity = updateCountryActivity;
+    window.addCountryFromDropdown = addCountryFromDropdown;
 
     /**
      * Export main functions for external use
@@ -776,10 +865,9 @@
     window.RiskAssessmentTool = {
         initialize,
         updateAPIStatus,
-        getSelectedCountries,
-        setSelectedCountries,
         getCurrentRiskData: () => currentRiskData,
-        getWorldMapComponent: () => worldMapComponent
+        getWorldMapComponent: () => worldMapComponent,
+        getSelectedCountriesData: () => selectedCountriesData
     };
 
     // Initialize when DOM is ready
